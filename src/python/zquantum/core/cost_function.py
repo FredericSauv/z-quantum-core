@@ -1,9 +1,10 @@
 from .interfaces.cost_function import CostFunction
 from .interfaces.backend import QuantumBackend
 from .circuit import build_ansatz_circuit, Circuit
-from typing import Callable, Optional, Dict
+from typing import Callable, Optional, Dict, List
 import numpy as np
 import copy
+from zquantum.core.measurement import ExpectationValues
 from openfermion import SymbolicOperator, QubitOperator
 from .utils import (convert_array_to_dict, convert_dict_to_array,
                     ValueEstimate)
@@ -78,7 +79,6 @@ class BasicCostFunction(CostFunction):
             return self.get_gradients_finite_difference(parameters)
         else:
             raise Exception("Gradient type: %s is not supported", self.gradient_type)
-
 
 
 class EvaluateOperatorCostFunction(CostFunction):
@@ -264,14 +264,18 @@ class OperaterFramesCostFunction(CostFunction):
         gradient_type (str): see Args
         epsilon (float): see Args
     """
-    # TODO must have ansatz positional argument in init
-    # TODO create a positional argument gor list of OperatorFrames
-    def __init__(self, cost_function='linear'):
+    def __init__(self, 
+                    circuit= None,
+                    cost_function='linear'):
         self.frames = [] # List of OperatorFrame objects
         self.constant = 0
         self.cost_function = cost_function
+        self.ansatz = None
+        self.backend = None
+        self.circuit = None
+        self.expectation_values = None
 
-    def _evaluate(self, expectation_values):
+    def _evaluate(self, parameters:np.ndarray=np.zeros((0,)))-> float:
         """Evaluate the objective function given a set of expectation values.
 
         Args: 
@@ -279,35 +283,37 @@ class OperaterFramesCostFunction(CostFunction):
         Returns:
             float: the value of the objective function
         """
-       
-        # 1. Build circuit from parameters and ansatz 
-        # 2. We are going to loop through frames 
-        #   b. create frame_circuit = frame.preprog + circuit+ frame.postprog  
-        #   c. call get_expectation_values using backend
-        #   d. add the values to a list : expecation_vales
-        #   e. Put list in ExpectationValues(expectation_values)   
-        # 3. Do the code below
-
+        if self.ansatz is not None and self.circuit is None :
+            assert(len(parameters) > 0)
+            self.circuit = build_ansatz_circuit(self.ansatz, parameters)
+        expectation_values = np.zeros((0,))  # 1D array of length zero
+        for frame in self.frames:
+            frame_circuit = frame.preprog + self.circuit + frame.postprog
+            frame_expvals = self.backend.get_expectation_values(frame_circuit, frame.op)
+            expectation_values = np.append(expectation_values, frame_expvals)
+        
+        self.expectation_values = ExpectationValues(expectation_values)
+        
         # Check that the number of expectation values is correct
         n_terms = sum([len(frame.op.terms) for frame in self.frames])
-        if n_terms != expectation_values.values.shape[0]:
+        if n_terms != self.expectation_values.values.shape[0]:
             raise(RuntimeError('Objective function has {} terms, but {} expectation values were provided.'.format(n_terms, expectation_values.values.shape[0])))
 
         total = self.constant
         term_index = 0
         for frame in self.frames:
             for term in frame.op.terms:
-                total += frame.op.terms[term]*expectation_values.values[term_index]
+                total += frame.op.terms[term]*self.expectation_values.values[term_index]
                 term_index += 1
 
-        if expectation_values.covariances is not None:
+        if self.expectation_values.covariances is not None:
 
             total_variance = 0.0   
             for n, frame in enumerate(self.frames):
                 for index1, term1 in enumerate(frame.op.terms):
                     for index2, term2 in enumerate(frame.op.terms):
                         total_variance += (frame.op.terms[term1] * frame.op.terms[term2] * 
-                                            expectation_values.covariances[n][index1, index2])
+                                            self.expectation_values.covariances[n][index1, index2])
             precision = np.sqrt(total_variance)
 
         else:
@@ -336,12 +342,12 @@ class OperaterFramesCostFunction(CostFunction):
         data['cost_function'] = self.cost_function
 
         return data
-
+    
     @classmethod
     def from_dict(cls, dictionary):
         """Create a LinearOperatorFramesCostFunction from a dictionary."""
 
-        objfun = cls()
+        framescostfunction = cls()
 
         # Load the frames
         for frame_dict in dictionary['frames']:
@@ -354,15 +360,15 @@ class OperaterFramesCostFunction(CostFunction):
             else:
                 postprog = None
             op = convert_dict_to_isingop(frame_dict['op'])
-            objfun.frames.append(OperatorFrame(
+            framescostfunction.frames.append(OperatorFrame(
                 preprog,
                 postprog,
                 op
             ))
 
         # Load the constant (should be loaded as just a singular float)
-        objfun.constant = convert_dict_to_array(dictionary['constant']).item()
+        framescostfunction.constant = convert_dict_to_array(dictionary['constant']).item()
         
-        return objfun
+        return framescostfunction
 
     
