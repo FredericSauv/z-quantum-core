@@ -385,7 +385,13 @@ def evaluate_framescostfunction(framescostfunction, expectation_values):
     Returns:
         dict: the estimated value and variance of the objective function
     """
-    return framescostfunction._evaluate(expectation_values)
+    if framescostfunction.backend is None:
+        raise RuntimeError('Please provide backend')
+    elif framescostfunction.circuit is None:
+        raise RuntimeError('Please provide circuit')
+    else:
+        framescostfunction.expectation_values = expectation_values
+    return framescostfunction._evaluate()
 
 def get_framescostfunction_from_qubit_operator(qubit_operator, grouping_strategy='individual',
                                                sort_terms = False):

@@ -116,7 +116,7 @@ class TestEvaluateOperatorCostFunction(unittest.TestCase, CostFunctionTests):
 class TestOperatorFramesCostFunction(unittest.TestCase):
 
     def setUp(self):
-        pass
+        backend = MockQuantumSimulator()
 
     def test_evaluate_framescostfunction_for_expectation_values_history(self):
         op = QubitOperator('2.0 [] + [Y0] + [Z1] + [X0 Y1]')
