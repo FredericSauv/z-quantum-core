@@ -327,7 +327,6 @@ def load_list(file):
     
     return data['list']
 
-
 def save_list(array, filename):
     """Save expectation values to a file.
 
@@ -355,6 +354,23 @@ def save_generic_dict(dictionary, filename):
     with open(filename, 'w') as f:
         f.write(json.dumps(dictionary_stored, indent=2))
 
+def load_generic_dict(file):
+    """Load a dictionary from a file.
+    Args:
+        file (str or file-like object): the name of the file, or a file-like object.
+
+    Returns:
+        dict: the loaded dict.
+    """
+
+    if isinstance(file, str):
+        with open(file, 'r') as f:
+            data = json.load(f)
+    else:
+        data = json.load(file)
+
+    return data
+    
 def create_object(specs, **kwargs):
     """
     Creates an object based on given specs.

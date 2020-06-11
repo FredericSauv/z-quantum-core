@@ -1,12 +1,17 @@
 import unittest
 import numpy as np
 from .cost_function import (BasicCostFunction, EvaluateOperatorCostFunction,
-                OperatorFrame, OperaterFramesCostFunction, evaluate_objective_function,
-                evaluate_objective_function_for_expectation_values_history)
+                OperatorFrame, OperaterFramesCostFunction, evaluate_framescostfunction,
+                evaluate_framescostfunction_for_expectation_values_history, 
+                get_framescostfunction_from_qubit_operator)
 from .interfaces.mock_objects import MockQuantumSimulator
 from .interfaces.cost_function_test import CostFunctionTests
 from openfermion import QubitOperator
-from .measurement import is_comeasureable, group_comeasureable_terms_greedy
+from .measurement import (is_comeasureable, group_comeasureable_terms_greedy, 
+                        ExpectationValues)
+from .core.circuit import Circuit
+import openfermion
+import pyquil
 
 class TestBasicCostFunction(unittest.TestCase, CostFunctionTests):
 
@@ -107,3 +112,74 @@ class TestEvaluateOperatorCostFunction(unittest.TestCase, CostFunctionTests):
         np.testing.assert_array_equal(history[0]['params'], params)
         self.assertEqual(history[1]['value'], value_2)
         np.testing.assert_array_equal(history[1]['params'], params)
+
+class TestOperatorFramesCostFunction(unittest.TestCase):
+
+    def setUp(self):
+        pass
+
+    def test_evaluate_framescostfunction_for_expectation_values_history(self):
+        op = QubitOperator('2.0 [] + [Y0] + [Z1] + [X0 Y1]')
+        frames_cost_function, _  = get_framescostfunction_from_qubit_operator(op)
+        
+
+        expvals_history = [ExpectationValues(np.array([1., 0.5, -1.0]), 
+                          covariances = [np.array([[0.1]]), np.array([[0.1]]), np.array([[0.1]])]),
+                           ExpectationValues(np.array([0.9, 0.4, -0.9]))]
+        
+        value_estimate_history = evaluate_framescostfunction_for_expectation_values_history(
+            frames_cost_function, expvals_history)
+
+        self.assertEqual(value_estimate_history[0].value, 2.5)
+        self.assertEqual(value_estimate_history[0].precision, 0.5477225575051662, 7)
+        self.assertEqual(value_estimate_history[1].value, 2.4)
+        self.assertEqual(value_estimate_history[1].precision, None)
+
+    def test_get_framescostfunction_from_qubit_operator(self):
+
+        # No grouping
+        op1 = QubitOperator('2.0 [] + [X0] + [Z1] + [X0 Y1]')
+        objfun, reordered_op = get_framescostfunction_from_qubit_operator(op1)
+        self.assertAlmostEqual(objfun.constant, 2.)
+        self.assertEqual(op1, reordered_op)
+
+        # Greedy grouping
+        op2 = QubitOperator('[Z0 Z1] + [X0 X1] + [Z0] + [X0]')
+        objfun, reordered_op = get_framescostfunction_from_qubit_operator(op2, 'greedy')
+
+        target_op_frame1 = openfermion.ops.IsingOperator('[Z0] + [Z0 Z1]')
+        target_op_frame2 = openfermion.ops.IsingOperator('[Z0] + [Z0 Z1]')
+        target_postprog_frame1 = Circuit()
+        target_postprog_frame2 = Circuit(pyquil.gates.RY(-np.pi / 2, 0)) + Circuit(pyquil.gates.RY(-np.pi / 2, 1))
+
+        self.assertEqual(target_op_frame1, objfun.frames[0].op)
+        self.assertEqual(target_op_frame2, objfun.frames[1].op)
+        self.assertEqual(target_postprog_frame1, objfun.frames[0].postprog)
+        self.assertEqual(target_postprog_frame2, objfun.frames[1].postprog)
+        self.assertAlmostEqual(objfun.constant, 0.)
+        self.assertEqual(len(objfun.frames), 2)
+        self.assertEqual(op2, reordered_op)
+
+        # All-in-one without constant term
+        op3 = QubitOperator.from_coeffs_and_labels([1,1,1,0.1,0.1,0.1],[[3,3,0],[3,0,3],[0,3,3],[3,0,0],[0,3,0],[0,0,3]])
+        objfun, qubitop = get_framescostfunction_from_qubit_operator(op3, 'all-in-one')
+        self.assertEqual(op3, qubitop)
+
+        # All-in-one with constant term
+        op4 = op3 + QubitOperator((), 3)
+        objfun, qubitop = get_framescostfunction_from_qubit_operator(op4, 'all-in-one')
+        self.assertEqual(op3, objfun.frames[0].op)
+        self.assertEqual(len(objfun.frames), 1)
+        self.assertAlmostEqual(objfun.constant, 3)
+        self.assertEqual(op4, qubitop)
+
+        # Check that the terms have been reordered correctly
+        self.assertEqual(list(reordered_op.terms)[0],
+                         ((0, 'Z'), (1, 'Z')))
+        self.assertEqual(list(reordered_op.terms)[1],
+                         ((0, 'Z'),))
+        self.assertEqual(list(reordered_op.terms)[2],
+                         ((0, 'X'), (1, 'X')))
+        self.assertEqual(list(reordered_op.terms)[3],
+                         ((0, 'X'),))
+
