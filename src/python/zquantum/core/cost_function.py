@@ -4,6 +4,9 @@ from .circuit import build_ansatz_circuit, Circuit
 from typing import Callable, Optional, Dict, List
 import numpy as np
 import copy
+import openfermion
+import pyquil
+import rapidjson as json
 from zquantum.core.measurement import ExpectationValues
 from openfermion import SymbolicOperator, QubitOperator
 from .utils import (convert_array_to_dict, convert_dict_to_array,
@@ -243,7 +246,7 @@ class OperatorFrame:
         return context
 
 
-class OperaterFramesCostFunction(CostFunction):
+class OperatorFramesCostFunction(CostFunction):
     """
     Cost function used for evaluating given operator using given ansatz.
 
@@ -325,7 +328,7 @@ class OperaterFramesCostFunction(CostFunction):
     def to_dict(self):
         """Convert to a dictionary"""
 
-        data = {'schema' : 'io-zapOS-v1alpha1-objective_function',
+        data = {'schema' : 'io-zapOS-v1alpha1-framescostfunction',
                 'frames' : []}
         
         # Add the frames to the dict
@@ -372,3 +375,165 @@ class OperaterFramesCostFunction(CostFunction):
         return framescostfunction
 
     
+def evaluate_framescostfunction(framescostfunction, expectation_values):
+    """Evaluate an objective function with respect to a set of expectation values.
+
+    Args:p
+        framescostfunction (zmachine.core.objective.ObjectiveFunction)
+        expectation_values (zmachine.core.measurement.ExpectationValues)
+    
+    Returns:
+        dict: the estimated value and variance of the objective function
+    """
+    return framescostfunction._evaluate(expectation_values)
+
+def get_framescostfunction_from_qubit_operator(qubit_operator, grouping_strategy='individual',
+                                               sort_terms = False):
+    """Get an objective function representing the minimization of the expectation value
+    of an operator.
+
+    Args:
+        qubit_operator (openfermion.ops.QubitOperator): the qubit operator whose expectation value is to be minimized
+        grouping_strategy (str): the strategy for grouping Pauli strings. 
+            Possible values include
+                'individual': each term is a separate frame
+                'greedy': grouping co-measurable terms using greedy approach
+                'all-in-one': put all terms in one frame
+        sort_terms (bool): whether to sort terms by the absolute value of the coefficient when grouping
+    
+    Returns:
+        tuple: a two-element tuple containing 
+        - **framescostfunction** (**zmachine.core.objective.ObjectiveFunction**): the objective 
+            function with context-selection gates added to each frame
+        - **reordered_qubit_operator** (**openfermion.ops.QubitOperator**): a qubit operator whose terms have 
+            been reordered to correspond to the order terms in the objective function
+    """
+
+    framescostfunction = OperatorFramesCostFunction()
+
+    # Check if there is a constant term
+    if qubit_operator.terms.get(()):
+        framescostfunction.constant = qubit_operator.terms[()]
+
+    if grouping_strategy == 'individual':
+        # Create a frame for each term in the qubit operator
+        for term in qubit_operator.terms:
+            if len(term) > 0:
+                context_selection_circuit = Circuit()
+                operator = openfermion.ops.IsingOperator(())
+                for factor in term:
+                    if factor[1] == 'X':
+                        context_selection_circuit += Circuit(pyquil.gates.RY(-np.pi / 2, factor[0]))
+                    elif factor[1] == 'Y':
+                        context_selection_circuit += Circuit(pyquil.gates.RX(np.pi / 2, factor[0]))
+                    operator *= openfermion.ops.IsingOperator((factor[0], 'Z'))
+                operator *= qubit_operator.terms[term]
+                framescostfunction.frames.append(OperatorFrame(Circuit(), context_selection_circuit, operator))    
+        return (framescostfunction, qubit_operator)
+
+    elif grouping_strategy == 'greedy' or grouping_strategy == 'greedy-with-duplicates':
+
+        # Using a greedy grouping algorithm
+        duplicate_terms = True if grouping_strategy == 'greedy-with-duplicates' else False
+        groups = group_comeasureable_terms_greedy(qubit_operator, duplicate_terms=duplicate_terms,
+                                                  sort_terms = sort_terms)
+        return get_framescostfunction_from_list_of_qubitoperators(groups, framescostfunction, qubit_operator)
+    
+    elif grouping_strategy == 'all-in-one':
+        # No grouping - all terms are in the same basis (as in e.g. QAOA)
+
+        # Remove the constant term
+        qubit_operator_without_constant = copy.deepcopy(qubit_operator)
+        if qubit_operator.terms.get(()) is not None:
+            qubit_operator_without_constant.terms.pop(())
+            print('hello')
+        print(qubit_operator_without_constant)
+        # Check if all terms are actually in the same basis
+        list_symbols = []
+        for key in qubit_operator.terms.keys():
+            for term in key:
+                list_symbols.append(term[1])
+        if len(set(list_symbols)) > 1:
+            raise Exception("Input operator contains non-commuting sets of terms - unable to group under a single basis")
+        framescostfunction.frames.append(OperatorFrame(Circuit(), Circuit(), qubit_operator_without_constant))
+
+        return (framescostfunction, qubit_operator)
+
+    else:
+        raise RuntimeError('Grouping method {} not supported'.format(grouping_strategy))
+
+def evaluate_framescostfunction_for_expectation_values_history(framescostfunction,
+                                                               expectation_values_history):
+    """Convert an expectation value history (i.e. a list of lists of estimators)
+        to the corresponding ValueEstimate history.
+
+    Args:
+        expectation_values_history (list of lists of zmachine.core.measurement.ExpectationValues): 
+        Contains the history of expectation values
+
+    Returns:
+        A list of zmachine.core.utils.ValueEstimate objects: Contains the estimate of the 
+        objective function value (as well as its precision) at each inference round. 
+    """
+    value_estimate_history = []
+
+    for expvals in expectation_values_history:
+        value_estimate_object = framescostfunction._evaluate(expvals)
+        value_estimate_history.append(value_estimate_object)
+    
+    return value_estimate_history
+
+def get_framescostfunction_from_list_of_qubitoperators(groups, framescostfunction, qubit_operator):
+    """
+    Generates and objective function and a reordered qubit operator
+    from a list of qubit operators.
+        Args:
+            groups (list of zmachine.core.qubitoperator.QubitOperator): list
+                of qubit operators corresponding to comeasurable sets
+            framescostfunction (zmachine.core.objective.ObjectiveFunction): objective function
+                to be filled.
+            qubit_operator (zmachine.core.qubitOperator): the original qubit
+                operator for which the grouping is being done.
+        
+    Returns:
+        tuple: a two-element tuple containing 
+        - **framescostfunction** (**zmachine.core.objective.ObjectiveFunction**): the objective 
+            function with context-selection gates added to each frame
+        - **reordered_qubit_operator** (**openfermion.ops.QubitOperator**): a qubit operator whose terms have 
+            been reordered to correspond to the order terms in the objective function
+    """
+    for group in groups:
+        operator = openfermion.ops.IsingOperator()
+        context_map = {} # Map between qubit index and measurement context ('X', 'Y', or 'Z')
+            
+        for term in group.terms:
+            ising_term = openfermion.ops.IsingOperator(())
+            if len(term) > 0:
+                for factor in term:
+                    context_map[factor[0]] = factor[1]
+                    ising_term *= openfermion.ops.IsingOperator((factor[0], 'Z'))
+                ising_term *= group.terms[term]
+                operator += ising_term
+
+        # Create context selection circuit
+        context_selection_circuit = Circuit()
+        for qubit in context_map:
+            if context_map[qubit] == 'X':
+                context_selection_circuit += Circuit(pyquil.gates.RY(-np.pi / 2, qubit))
+            elif context_map[qubit] == 'Y':
+                context_selection_circuit += Circuit(pyquil.gates.RX(np.pi / 2, qubit))
+
+        framescostfunction.frames.append(OperatorFrame(Circuit(), context_selection_circuit, operator))
+        
+    # Construct the reordered qubit operator. Note that we are taking advantage of the fact that
+    # the QubitOperator class preserves the order of terms when they are added
+    reordered_qubit_operator = openfermion.ops.QubitOperator()
+    # Add identity back in reordered operator
+    if qubit_operator.terms.get(()):
+        reordered_qubit_operator += openfermion.ops.QubitOperator((),qubit_operator.terms[()])
+    for group in groups:
+        for term in group.terms:
+            reordered_qubit_operator += openfermion.ops.QubitOperator(term, group.terms[term])
+
+    return (framescostfunction, reordered_qubit_operator)
+

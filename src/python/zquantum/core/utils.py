@@ -16,6 +16,7 @@ import collections
 import scipy
 from typing import List
 import importlib
+from cost_function import OperatorFramesCostFunction
 
 SCHEMA_VERSION = 'zapata-v1'
 RNDSEED = 12345
@@ -341,6 +342,18 @@ def save_list(array, filename):
     with open(filename, 'w') as f:
         f.write(json.dumps(dictionary, indent=2))
 
+def save_generic_dict(dictionary, filename):
+    """Save dictionary as json
+
+    Args:
+        dictionary (dict): the dict containing the data
+    """
+    dictionary_stored = {}
+    dictionary_stored['schema'] = SCHEMA_VERSION + '-dict'
+    dictionary_stored['dict'] = dictionary
+    
+    with open(filename, 'w') as f:
+        f.write(json.dumps(dictionary_stored, indent=2))
 
 def create_object(specs, **kwargs):
     """
@@ -362,3 +375,35 @@ def create_object(specs, **kwargs):
     creator = getattr(module, creator_name)
     created_object = creator(**specs, **kwargs)
     return created_object
+
+def load_framescostfunction(file):
+    """Load an objective function from a file.
+
+    Args:
+        file (str or file-like object): the name of the file, or a file-like object.
+    
+    Returns:
+        zmachine.core.objective.OperatorFramesCostFunction: the composite objective function.
+    """
+
+    if isinstance(file, str):
+        with open(file, 'r') as f:
+            data = json.load(f)
+    else:
+        data = json.load(file)
+ 
+    framescostfunction = OperatorFramesCostFunction.from_dict(data)
+
+    return framescostfunction
+
+def save_framescostfunction(framescostfunction, filename):
+    """Save an objective function to file.
+
+    Args:
+        framescostfunction (zquantume.core.cost_function.OperatorFamesCostFunction): the objective function to be saved.
+        filename (str): the name of the file
+    """
+ 
+    with open(filename, 'w') as f:
+        f.write(json.dumps(framescostfunction.to_dict(), indent=2))
+

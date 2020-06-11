@@ -3,6 +3,7 @@ import json
 from pyquil.wavefunction import Wavefunction
 from grove.pyvqe.vqe import parity_even_p
 import numpy as np
+from openfermion import SymbolicOperator, QubitOperator
 from openfermion.ops import IsingOperator
 from .utils import (SCHEMA_VERSION, convert_array_to_dict, convert_dict_to_array,
     sample_from_probability_distribution, convert_bitstrings_to_tuples, convert_tuples_to_bitstrings)
@@ -228,7 +229,6 @@ def save_parities(parities: Parities, filename: str) -> None:
 
     with open(filename, 'w') as f:
         f.write(json.dumps(data, indent=2))
-
 
 def load_parities(file: TextIO) -> Parities:
     """Load parities from a file.
@@ -496,3 +496,98 @@ class Measurements:
                 expectation += np.real(coefficient) * value
             expectation_values.append(np.real(expectation))
         return ExpectationValues(np.array(expectation_values))
+
+
+def is_comeasureable(term1, term2):
+    """Determine if two Pauli terms are co-measureable. Co-measureable means that
+       for each qubit: both terms apply the same Pauli operator, or at least one term
+        applies the identity.
+
+    Args:
+        term1 (tuple): a product of Pauli operators represented in openfermion style
+        term2 (tuple): a product of Pauli operators represented in openfermion style
+
+    Returns:
+        bool: True if the terms are co-measureable.
+    """
+
+    for op1 in term1:
+        for op2 in term2:
+
+            # Check if the two Pauli operators act on the same qubit
+            if op1[0] == op2[0]:
+
+                # Check if the two Pauli operators are different
+                if op1[1] != op2[1]:
+                    return False
+
+    return True
+
+def group_comeasureable_terms_greedy(qubit_operator, duplicate_terms=False, sort_terms = False):
+    """Group co-measurable terms in a qubit operator using a greedy algorithm. Adapted from pyquil.
+
+    Args:
+        qubit_operator (openfermion.ops.QubitOperator): the operator whose terms are to be grouped
+        duplicate_terms (bool): if True, then greedily put terms in multiple groups. The coefficients of
+            all of a term's duplicates will sum to the terms original coefficient.
+        sort_terms (bool): whether to sort terms by the absolute value of the coefficient when grouping
+
+	Returns:
+        list: a list of qubit operators
+    """
+
+    groups = [] # List of openfermion.ops.QubitOperators representing groups of co-measureable terms
+
+    if sort_terms:
+        terms_iterator = sorted(qubit_operator.terms.items(), key=lambda x: abs(x[1]), reverse=True)
+    else:
+        terms_iterator = qubit_operator.terms.items()
+
+    for term, coefficient in terms_iterator:
+        assigned = False # True if the current term has been assigned to a group
+        # Identity should not be in a group
+        if term == ():
+            continue
+        for group in groups:
+            commeasureable_with_group = True # True if the current term is co-measureable with the current group
+            for term_to_compare in group.terms:
+                if not is_comeasureable(term, term_to_compare):
+                    commeasureable_with_group = False
+                    break
+            if commeasureable_with_group:
+                # Add the term to the group
+                group += QubitOperator(term, coefficient)
+                assigned = True
+                break
+
+        # If term was not co-measureable with any group, it gets to start its own group!
+        if not assigned:
+            groups.append(QubitOperator(term, qubit_operator.terms[term]))
+
+    # Greedily add the terms into groups that they are co-measu
+    if duplicate_terms:
+        for term, coefficient in terms_iterator:
+			# Identity should not be in a group
+            if term == ():
+                continue
+            duplicate_count = 1 # Number of groups that the term appears in
+            containing_groups = [] # Groups that contain term
+            for group in groups:
+                if group.terms.get(term):
+                    containing_groups.append(group)
+                else:
+                    if not group.terms.get(term):
+                        commeasureable_with_group = True # True if the current term is co-measureable with the current group
+                        for term_to_compare in group.terms:
+                            if not is_comeasureable(term, term_to_compare):
+                                commeasureable_with_group = False
+                                break
+                        if commeasureable_with_group:
+                            # Add the term to the group
+                            group += QubitOperator(term, coefficient)
+                            containing_groups.append(group)
+                            duplicate_count += 1
+            for group in containing_groups:
+                group.terms[term] /= duplicate_count # Normalize the duplicates
+
+    return groups

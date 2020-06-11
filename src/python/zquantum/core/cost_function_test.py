@@ -1,9 +1,12 @@
 import unittest
 import numpy as np
-from .cost_function import BasicCostFunction, EvaluateOperatorCostFunction
+from .cost_function import (BasicCostFunction, EvaluateOperatorCostFunction,
+                OperatorFrame, OperaterFramesCostFunction, evaluate_objective_function,
+                evaluate_objective_function_for_expectation_values_history)
 from .interfaces.mock_objects import MockQuantumSimulator
 from .interfaces.cost_function_test import CostFunctionTests
 from openfermion import QubitOperator
+from .measurement import is_comeasureable, group_comeasureable_terms_greedy
 
 class TestBasicCostFunction(unittest.TestCase, CostFunctionTests):
 
