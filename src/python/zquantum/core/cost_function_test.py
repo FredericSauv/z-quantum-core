@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from .cost_function import (BasicCostFunction, EvaluateOperatorCostFunction,
-                OperatorFrame, OperaterFramesCostFunction, evaluate_framescostfunction,
+                OperatorFrame, OperatorFramesCostFunction, evaluate_framescostfunction,
                 evaluate_framescostfunction_for_expectation_values_history, 
                 get_framescostfunction_from_qubit_operator)
 from .interfaces.mock_objects import MockQuantumSimulator
