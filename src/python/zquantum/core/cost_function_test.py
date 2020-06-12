@@ -4,14 +4,13 @@ from .cost_function import (BasicCostFunction, EvaluateOperatorCostFunction,
                 OperatorFrame, OperatorFramesCostFunction, evaluate_framescostfunction,
                 evaluate_framescostfunction_for_expectation_values_history, 
                 get_framescostfunction_from_qubit_operator)
-from .cost_function import (BasicCostFunction, EvaluateOperatorCostFunction,
-                OperatorFrame)
 from .interfaces.mock_objects import MockQuantumSimulator
 from .interfaces.cost_function_test import CostFunctionTests
 from openfermion import QubitOperator
 from .measurement import (is_comeasureable, group_comeasureable_terms_greedy, 
                         ExpectationValues)
 from .circuit import Circuit
+from .utils import load_framescostfunction, save_framescostfunction
 import openfermion
 import pyquil
 
@@ -119,6 +118,7 @@ class TestOperatorFramesCostFunction(unittest.TestCase):
 
     def setUp(self):
        pass
+    
     def test_evaluate_framescostfunction_for_expectation_values_history(self):
         op = QubitOperator('2.0 [] + [Y0] + [Z1] + [X0 Y1]')
         frames_cost_function, _  = get_framescostfunction_from_qubit_operator(op)
@@ -140,40 +140,27 @@ class TestOperatorFramesCostFunction(unittest.TestCase):
 
         # No grouping
         op1 = QubitOperator('2.0 [] + [X0] + [Z1] + [X0 Y1]')
-        objfun, reordered_op = get_framescostfunction_from_qubit_operator(op1)
-        self.assertAlmostEqual(objfun.constant, 2.)
+        framescostfunction, reordered_op = get_framescostfunction_from_qubit_operator(op1)
+        self.assertAlmostEqual(framescostfunction.constant, 2.)
         self.assertEqual(op1, reordered_op)
 
         # Greedy grouping
         op2 = QubitOperator('[Z0 Z1] + [X0 X1] + [Z0] + [X0]')
-        objfun, reordered_op = get_framescostfunction_from_qubit_operator(op2, 'greedy')
+        framescostfunction, reordered_op = get_framescostfunction_from_qubit_operator(op2, 'greedy')
 
         target_op_frame1 = openfermion.ops.IsingOperator('[Z0] + [Z0 Z1]')
         target_op_frame2 = openfermion.ops.IsingOperator('[Z0] + [Z0 Z1]')
         target_postprog_frame1 = Circuit()
         target_postprog_frame2 = Circuit(pyquil.gates.RY(-np.pi / 2, 0)) + Circuit(pyquil.gates.RY(-np.pi / 2, 1))
 
-        self.assertEqual(target_op_frame1, objfun.frames[0].op)
-        self.assertEqual(target_op_frame2, objfun.frames[1].op)
-        self.assertEqual(target_postprog_frame1, objfun.frames[0].postprog)
-        self.assertEqual(target_postprog_frame2, objfun.frames[1].postprog)
-        self.assertAlmostEqual(objfun.constant, 0.)
-        self.assertEqual(len(objfun.frames), 2)
+        self.assertEqual(target_op_frame1, framescostfunction.frames[0].op)
+        self.assertEqual(target_op_frame2, framescostfunction.frames[1].op)
+        self.assertEqual(target_postprog_frame1, framescostfunction.frames[0].postprog)
+        self.assertEqual(target_postprog_frame2, framescostfunction.frames[1].postprog)
+        self.assertAlmostEqual(framescostfunction.constant, 0.)
+        self.assertEqual(len(framescostfunction.frames), 2)
         self.assertEqual(op2, reordered_op)
-
-        # All-in-one without constant term
-        op3 = QubitOperator.from_coeffs_and_labels([1,1,1,0.1,0.1,0.1],[[3,3,0],[3,0,3],[0,3,3],[3,0,0],[0,3,0],[0,0,3]])
-        objfun, qubitop = get_framescostfunction_from_qubit_operator(op3, 'all-in-one')
-        self.assertEqual(op3, qubitop)
-
-        # All-in-one with constant term
-        op4 = op3 + QubitOperator((), 3)
-        objfun, qubitop = get_framescostfunction_from_qubit_operator(op4, 'all-in-one')
-        self.assertEqual(op3, objfun.frames[0].op)
-        self.assertEqual(len(objfun.frames), 1)
-        self.assertAlmostEqual(objfun.constant, 3)
-        self.assertEqual(op4, qubitop)
-
+        
         # Check that the terms have been reordered correctly
         self.assertEqual(list(reordered_op.terms)[0],
                          ((0, 'Z'), (1, 'Z')))
@@ -184,3 +171,24 @@ class TestOperatorFramesCostFunction(unittest.TestCase):
         self.assertEqual(list(reordered_op.terms)[3],
                          ((0, 'X'),))
 
+        self.assertEqual(list(reordered_op.terms)[3],
+                         ((0, 'X'),))
+
+    def test_framescostfunction_io(self):
+        op = QubitOperator('2.0 [] + [X0] + [Z1] + [X0 Y1]')
+        framescostfunction, _ = get_framescostfunction_from_qubit_operator(op)
+        save_framescostfunction(framescostfunction, 'framescostfunction.json')
+        framescostfunction_loaded = load_framescostfunction('framescostfunction.json')
+
+        # Check that the frames are equal
+        for i in range(len(framescostfunction.frames)):
+            self.assertEqual(framescostfunction.frames[i].preprog,
+                             framescostfunction_loaded.frames[i].preprog)
+            self.assertEqual(framescostfunction.frames[i].postprog,
+                             framescostfunction_loaded.frames[i].postprog)
+            # self.assertEqual(framescostfunction.frames[i].op,
+            #                  framescostfunction_loaded.frames[i].op)
+            self.assertTrue(framescostfunction.frames[i].op == framescostfunction_loaded.frames[i].op, msg=str([type(framescostfunction.frames[i].op), type(framescostfunction_loaded.frames[i].op)]))
+
+            # Check that constant is equal
+            self.assertAlmostEqual(framescostfunction.constant, framescostfunction.constant)

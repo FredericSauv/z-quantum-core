@@ -16,7 +16,6 @@ import collections
 import scipy
 from typing import List
 import importlib
-# from .cost_function import OperatorFramesCostFunction
 
 SCHEMA_VERSION = 'zapata-v1'
 RNDSEED = 12345
@@ -399,7 +398,7 @@ def load_framescostfunction(file):
         file (str or file-like object): the name of the file, or a file-like object.
     
     Returns:
-        zmachine.core.objective.OperatorFramesCostFunction: the composite objective function.
+        zquantum.core.OperatorFramesCostFunction: the composite OperatorFramesCostFunction.
     """
 
     if isinstance(file, str):
@@ -407,7 +406,7 @@ def load_framescostfunction(file):
             data = json.load(f)
     else:
         data = json.load(file)
- 
+    from .cost_function import OperatorFramesCostFunction
     framescostfunction = OperatorFramesCostFunction.from_dict(data)
 
     return framescostfunction
@@ -416,7 +415,7 @@ def save_framescostfunction(framescostfunction, filename):
     """Save an objective function to file.
 
     Args:
-        framescostfunction (zquantume.core.cost_function.OperatorFamesCostFunction): the objective function to be saved.
+        framescostfunction (zquantum.core.cost_function.OperatorFamesCostFunction): the operatorframescostfunction to be saved.
         filename (str): the name of the file
     """
  
