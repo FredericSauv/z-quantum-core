@@ -117,8 +117,40 @@ class TestEvaluateOperatorCostFunction(unittest.TestCase, CostFunctionTests):
 class TestOperatorFramesCostFunction(unittest.TestCase):
 
     def setUp(self):
-       pass
-    
+       target_operator = QubitOperator('Z0')
+       ansatz = {'ansatz_module': 'zquantum.core.interfaces.mock_objects', 'ansatz_func': 'mock_ansatz', 'ansatz_kwargs': {}, 'n_params': [1]}
+       frames_cost_function, _ = get_framescostfunction_from_qubit_operator(target_operator)
+       backend = MockQuantumSimulator()
+       frames_cost_function.frames
+       frames_cost_function.ansatz = ansatz
+       frames_cost_function.backend = backend
+       self.single_term_op_cost_function = frames_cost_function
+       
+       # Setting up inherited tests
+       self.cost_functions = [self.single_term_op_cost_function]
+       self.params_sizes = [2]
+
+    # def test_evaluate(self):
+    #     # Given
+    #     params = np.array([1, 2])
+
+    #     # When
+    #     value_1 = self.single_term_op_cost_function.evaluate(params)
+    #     value_2 = self.single_term_op_cost_function.evaluate(params)
+    #     history = self.single_term_op_cost_function.evaluations_history
+
+    #     # Then
+    #     self.assertGreaterEqual(value_1, 0)
+    #     self.assertLessEqual(value_1, 1)
+    #     self.assertGreaterEqual(value_2, 0)
+    #     self.assertLessEqual(value_2, 1)
+    #     self.assertEqual(len(history), 2)
+    #     self.assertEqual(history[0]['value'], value_1)
+    #     np.testing.assert_array_equal(history[0]['params'], params)
+    #     self.assertEqual(history[1]['value'], value_2)
+    #     np.testing.assert_array_equal(history[1]['params'], params)
+
+   
     def test_evaluate_framescostfunction_for_expectation_values_history(self):
         op = QubitOperator('2.0 [] + [Y0] + [Z1] + [X0 Y1]')
         frames_cost_function, _  = get_framescostfunction_from_qubit_operator(op)

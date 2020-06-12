@@ -246,7 +246,7 @@ class OperatorFrame:
         return context
 
 
-class OperatorFramesCostFunction(CostFunction):
+class OperatorFramesCostFunction:
     """
     Cost function used for evaluating given operator using given ansatz.
 
@@ -269,7 +269,10 @@ class OperatorFramesCostFunction(CostFunction):
     """
     def __init__(self, 
                     circuit= None,
-                    cost_function='linear'):
+                    cost_function='linear', 
+                    gradient_type:str='finite_difference',
+                    save_evaluation_history:bool=True,
+                    epsilon:float=1e-5):
         self.frames = [] # List of OperatorFrame objects
         self.constant = 0
         self.cost_function = cost_function
@@ -277,6 +280,10 @@ class OperatorFramesCostFunction(CostFunction):
         self.backend = None
         self.circuit = None
         self.expectation_values = None
+        self.evaluations_history = []
+        self.save_evaluation_history = save_evaluation_history
+        self.gradient_type = gradient_type
+        self.epsilon = epsilon
 
     def _evaluate(self, parameters:np.ndarray=np.zeros((0,)))-> float:
         """Evaluate the objective function given a set of expectation values.
@@ -290,7 +297,7 @@ class OperatorFramesCostFunction(CostFunction):
             assert(len(parameters) > 0)
             self.circuit = build_ansatz_circuit(self.ansatz, parameters)
         expectation_values = np.zeros((0,))  # 1D array of length zero
-        if self.circuit is not None and self.backend is None:
+        if self.circuit is not None and self.backend is not None:
             for frame in self.frames:
                 frame_circuit = frame.preprog + self.circuit + frame.postprog
                 frame_expvals = self.backend.get_expectation_values(frame_circuit, frame.op)
@@ -307,6 +314,7 @@ class OperatorFramesCostFunction(CostFunction):
         term_index = 0
         for frame in self.frames:
             for term in frame.op.terms:
+                print('expectation values: ', self.expectation_values.values[term_index])
                 total += frame.op.terms[term]*self.expectation_values.values[term_index]
                 term_index += 1
 
@@ -374,7 +382,22 @@ class OperatorFramesCostFunction(CostFunction):
         framescostfunction.constant = convert_dict_to_array(dictionary['constant']).item()
         
         return framescostfunction
+    
+    # def get_gradient(self, parameters:np.ndarray) -> np.ndarray:
+    #     """
+    #     Evaluates the gradient of the cost function for given parameters.
+    #     What method is used for calculating gradients is indicated by `self.gradient_type` field.
 
+    #     Args:
+    #         parameters: parameters for which we calculate the gradient.
+
+    #     Returns:
+    #         np.ndarray: gradient vector 
+    #     """
+    #     if self.gradient_type == "finite_difference":
+    #         return self.get_gradients_finite_difference(parameters)
+    #     else:
+    #         raise Exception("Gradient type: %s is not supported", self.gradient_type)
     
 def evaluate_framescostfunction(framescostfunction, expectation_values):
     """Evaluate an objective function with respect to a set of expectation values.
@@ -478,6 +501,7 @@ def evaluate_framescostfunction_for_expectation_values_history(framescostfunctio
         objective function value (as well as its precision) at each inference round. 
     """
     value_estimate_history = []
+
 
     for expvals in expectation_values_history:
         framescostfunction.expectation_values = expvals
