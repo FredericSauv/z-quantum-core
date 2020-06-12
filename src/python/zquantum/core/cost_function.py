@@ -386,11 +386,6 @@ def evaluate_framescostfunction(framescostfunction, expectation_values):
     Returns:
         dict: the estimated value and variance of the objective function
     """
-    # if framescostfunction.backend is None:
-    #     raise RuntimeError('Please provide backend')
-    # elif framescostfunction.circuit is None:
-    #     raise RuntimeError('Please provide circuit')
-    # else:
     framescostfunction.expectation_values = expectation_values
     return framescostfunction._evaluate()
 
@@ -484,15 +479,10 @@ def evaluate_framescostfunction_for_expectation_values_history(framescostfunctio
     """
     value_estimate_history = []
 
-    if framescostfunction.backend is None:
-        raise RuntimeError('Please provide backend')
-    elif framescostfunction.circuit is None:
-        raise RuntimeError('Please provide circuit')
-    else:
-        for expvals in expectation_values_history:
-            framescostfunction.expectation_values = expvals
-            value_estimate_object = framescostfunction._evaluate()
-            value_estimate_history.append(value_estimate_object)
+    for expvals in expectation_values_history:
+        framescostfunction.expectation_values = expvals
+        value_estimate_object = framescostfunction._evaluate()
+        value_estimate_history.append(value_estimate_object)
     
     return value_estimate_history
 
