@@ -290,12 +290,13 @@ class OperatorFramesCostFunction(CostFunction):
             assert(len(parameters) > 0)
             self.circuit = build_ansatz_circuit(self.ansatz, parameters)
         expectation_values = np.zeros((0,))  # 1D array of length zero
-        for frame in self.frames:
-            frame_circuit = frame.preprog + self.circuit + frame.postprog
-            frame_expvals = self.backend.get_expectation_values(frame_circuit, frame.op)
-            expectation_values = np.append(expectation_values, frame_expvals)
+        if self.circuit is not None and self.backend is None:
+            for frame in self.frames:
+                frame_circuit = frame.preprog + self.circuit + frame.postprog
+                frame_expvals = self.backend.get_expectation_values(frame_circuit, frame.op)
+                expectation_values = np.append(expectation_values, frame_expvals)
         
-        self.expectation_values = ExpectationValues(expectation_values)
+            self.expectation_values = ExpectationValues(expectation_values)
         
         # Check that the number of expectation values is correct
         n_terms = sum([len(frame.op.terms) for frame in self.frames])
@@ -483,9 +484,15 @@ def evaluate_framescostfunction_for_expectation_values_history(framescostfunctio
     """
     value_estimate_history = []
 
-    for expvals in expectation_values_history:
-        value_estimate_object = framescostfunction._evaluate(expvals)
-        value_estimate_history.append(value_estimate_object)
+    if framescostfunction.backend is None:
+        raise RuntimeError('Please provide backend')
+    elif framescostfunction.circuit is None:
+        raise RuntimeError('Please provide circuit')
+    else:
+        for expvals in expectation_values_history:
+            framescostfunction.expectation_values = expvals
+            value_estimate_object = framescostfunction._evaluate()
+            value_estimate_history.append(value_estimate_object)
     
     return value_estimate_history
 

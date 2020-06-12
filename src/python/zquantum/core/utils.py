@@ -16,7 +16,7 @@ import collections
 import scipy
 from typing import List
 import importlib
-from cost_function import OperatorFramesCostFunction
+from zquantum.core.cost_function import OperatorFramesCostFunction
 
 SCHEMA_VERSION = 'zapata-v1'
 RNDSEED = 12345
@@ -370,7 +370,7 @@ def load_generic_dict(file):
         data = json.load(file)
 
     return data
-    
+
 def create_object(specs, **kwargs):
     """
     Creates an object based on given specs.
