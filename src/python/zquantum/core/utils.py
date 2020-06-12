@@ -16,7 +16,7 @@ import collections
 import scipy
 from typing import List
 import importlib
-from .cost_function import OperatorFramesCostFunction
+# from .cost_function import OperatorFramesCostFunction
 
 SCHEMA_VERSION = 'zapata-v1'
 RNDSEED = 12345
