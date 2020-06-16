@@ -285,7 +285,7 @@ class OperatorFramesCostFunction:
         self.gradient_type = gradient_type
         self.epsilon = epsilon
 
-    def _evaluate(self, parameters:np.ndarray=np.zeros((0,)))-> float:
+    def _evaluate(self, parameters:np.ndarray=np.zeros((0,))):
         """Evaluate the objective function given a set of expectation values.
 
         Args: 
