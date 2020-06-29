@@ -25,7 +25,7 @@ spec:
       - name: graph
         path: /app/graph.json
     
-    - name: generate-regular-graph
+  - name: generate-regular-graph
     parent: generic-task
     inputs:
       parameters:
@@ -42,8 +42,8 @@ spec:
           data: |
             from zquantum.core.graph import generate_random_graph_regular, save_graph
             graph = generate_random_graph_regular({{inputs.parameters.n-nodes}},
-                                                      {{inputs.parameters.degree}},
-                                                      bool("{{inputs.parameters.random-weights}}"))
+                                                    {{inputs.parameters.degree}},
+                                                    bool("{{inputs.parameters.random-weights}}"))
             save_graph(graph, 'graph.json')
     outputs:
       artifacts:
