@@ -244,6 +244,48 @@ def build_uniform_param_grid(ansatz: dict,
     param_ranges = [(min_value, max_value, step)]*n_params
     return ParameterGrid(param_ranges)
 
+def build_flexible_uniform_param_grid(ansatz: dict, 
+                            n_layers: int=1, 
+                            min_value: List[float]=[0.], 
+                            max_value: List[float]=[2*np.pi], 
+                            step: List[float]=[np.pi/5],
+                            per_params: bool = True) -> ParameterGrid:
+    """Builds a uniform grid of parameters, where domain (and step) of each 
+    parameters can be specified.
+
+    Args:
+        ansatz (dict): a dict representing a variational circuit template
+        n_layers (int): the number of layers to create parameters for
+        min_value (float): a list with the minimum value for each layer/parameter
+        max_value (float): a list with the maximum value for each layer/parameter
+        step (float): a list of step sizes for each layer/parameter
+        per_params(bool): if True(False) min/max/step arev specified per params(layers)
+    Returns:
+        list: a list of numpy.ndarray objects representing points on a grid in parameter space
+    Remarks:
+        To be tested
+    """
+    param_ranges = []
+    n_params_cum = 0
+    n_params_total = np.sum(ansatz['n_params'])
+    if per_params:
+        for i in range(n_layers):
+            n_params_layer = ansatz['n_params'][i % len(ansatz['n_params'])]
+            n_params_ref = n_params_cum % n_params_total
+            range_ref = range(n_params_ref, n_params_ref + n_params_layer)
+            param_ranges.extend([(min_value[ii], max_value[ii], step[ii]) for ii in range_ref])
+            n_params_cum += n_params_layer
+    else:
+        for i in range(n_layers):
+            n_params = ansatz['n_params'][i % len(ansatz['n_params'])]
+            min_val = min_value[i % len(ansatz['n_params'])]
+            max_val = max_value[i % len(ansatz['n_params'])]
+            eps = step[i % len(ansatz['n_params'])]
+            param_ranges.extend([(min_val, max_val, eps)] * n_params)
+    
+    return ParameterGrid(param_ranges)
+
+
 class CircuitLayers(object):
     """A class representing a pattern of circuit layers, consisting of lists,
         each list containing the groups of qubits entangled for each multiqubit
