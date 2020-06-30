@@ -38,7 +38,7 @@ spec:
             from zquantum.core.cost_function import EvaluateOperatorCostFunction
             from zquantum.core.circuit import load_circuit_template, load_circuit_template_params, save_circuit_template_params, load_parameter_grid
             from qeopenfermion import load_qubit_operator
-            from zquantum.core.utils import create_object
+            from zquantum.core.utils import create_object, convert_array_to_dict
             import json
             
             # need an ansatz, a (cost) operator and a backend
@@ -56,9 +56,8 @@ spec:
             cost_dict = {}
             cost_dict["cost"] = cost
             cost_dict["schema"] = "cost-value"
-            cost_dict["parameters"] = parameters
+            cost_dict["parameters"] = convert_array_to_dict(parameters)
             
-
             with open("cost-value.json",'w') as f:
                 f.write(json.dumps(cost_dict, indent=2))
 
