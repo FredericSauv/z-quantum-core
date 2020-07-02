@@ -126,3 +126,56 @@ def generate_random_graph_regular(num_nodes: int,
         output_graph.add_weighted_edges_from(weighted_edges)
         
     return output_graph
+
+def generate_complete_graph(num_nodes: int, 
+                           random_weights: bool = False) -> nx.Graph:
+    """Generate a complete graph, i.e. each node is connected to each other one. 
+
+    Args:
+        num_nodes: integer
+            Number of nodes.
+        random_weights: bool
+            Flag indicating whether the weights should be random or constant.
+    
+    Returns:
+        A networkx.Graph object
+    """
+    output_graph = nx.complete_graph(n = num_nodes)
+
+    # iterate through all pairs of nodes
+    if random_weights:
+        weighted_edges = [(e[0], e[1], uniform(0, 1)) for e in output_graph.edges]
+        output_graph.add_weighted_edges_from(weighted_edges)
+        
+    return output_graph
+
+
+def generate_graph_from_specs(graph_specs):
+    """Generate a graph from a specs dictionary
+
+    Args:
+        graph_specs: dictionnary
+            Specifications of the graph top generate. It should contain at 
+            least an entry with key 'type' and one with num_nodes
+    
+    Returns:
+        A networkx.Graph object
+    """
+    if type(graph_specs) is str:
+        graph_specs = json.loads(graph_specs)
+    type_graph = graph_specs['type']
+    num_nodes = graph_specs['num_nodes']
+    random_weights = graph_specs.get('random_weights', False)
+    
+    if type_graph == 'erdos_renyi':
+        probability = graph_specs['probability']
+        graph = generate_random_graph_erdos_renyi(num_nodes, probability, random_weights)
+    
+    elif type_graph == 'regular':
+        degree = graph_specs['degree']
+        graph = generate_random_graph_regular(num_nodes, degree, random_weights)
+    
+    elif type_graph == 'complete':
+        graph = generate_complete_graph(num_nodes, random_weights)
+
+    return graph
