@@ -3,7 +3,8 @@ spec:
   # compute the cost function for some parameters
   # Maybe split as generate-cost-function / evaluate-cost-function 
   # (as the generate part is used in the optimizer)
-  # Maybe implement from-grid later on
+  # use artifact schema expectation values??
+  
   - name: compute-cost
     parent: generic-task
     inputs:
@@ -18,9 +19,6 @@ spec:
         path: /app/parameters.json
       - name: qubit-operator
         path: /app/qubitop.json
-      #- name: constraint-operator
-      #  path: /app/constraint_operator.json
-      #  optional: True
       - name: main-script
         path: /app/main_script.sh
         raw:
@@ -34,9 +32,8 @@ spec:
         raw:
           data: |
             import os
-            from zquantum.optimizers.utils import save_optimization_results
             from zquantum.core.cost_function import EvaluateOperatorCostFunction
-            from zquantum.core.circuit import load_circuit_template, load_circuit_template_params, save_circuit_template_params, load_parameter_grid
+            from zquantum.core.circuit import load_circuit_template, load_circuit_template_params
             from qeopenfermion import load_qubit_operator
             from zquantum.core.utils import create_object, convert_array_to_dict
             import json
@@ -55,7 +52,7 @@ spec:
             
             cost_dict = {}
             cost_dict["cost"] = cost
-            cost_dict["schema"] = "cost-value"
+            cost_dict["schema"] = "cost-value" 
             cost_dict["parameters"] = convert_array_to_dict(parameters)
             
             with open("cost-value.json",'w') as f:
@@ -66,6 +63,61 @@ spec:
       - name: cost-value
         path: /app/cost-value.json
 
+  - name: compute-cost-for-grid
+    parent: generic-task
+    inputs:
+      parameters:
+      - name: backend-specs
+      - name: command
+        value: bash main_script.sh
+      artifacts:
+      - name: ansatz
+        path: /app/ansatz.json
+      - name: parameter-grid
+        path: /app/parameter_grid.json
+      - name: qubit-operator
+        path: /app/qubitop.json
+      - name: main-script
+        path: /app/main_script.sh
+        raw:
+          data: |
+            qvm -S &
+            quilc -S &
+            source /app/usr/local/bin/compilers_and_libraries.sh
+            python3 python_script.py
+      - name: python-script
+        path: /app/python_script.py
+        raw:
+          data: |
+            import os
+            from zquantum.core.cost_function import EvaluateOperatorCostFunction
+            from zquantum.core.circuit import load_circuit_template, load_circuit_template_params, load_parameter_grid
+            from qeopenfermion import load_qubit_operator
+            from zquantum.core.utils import create_object, convert_array_to_dict
+            import json
+            
+            # need an ansatz, a (cost) operator and a backend
+            ansatz = load_circuit_template('ansatz.json')
+            operator = load_qubit_operator('qubitop.json')
+            backend_specs = {{inputs.parameters.backend-specs}}
+            backend = create_object(backend_specs)
+
+            # and a grid of parameters
+            grid = load_parameter_grid('parameter_grid.json')
+            cost_function = EvaluateOperatorCostFunction(operator, ansatz, backend)
+            
+            cost_grid = [cost_function.evaluate(parameters) for parameters in grid.params_list]
+            
+            cost_dict = {}
+            cost_dict["cost"] = cost
+            cost_dict["schema"] = "cost-value"
+            cost_dict["parameters"] = [convert_array_to_dict(parameters) for parameters in grid.params_list]
+            
+            with open("cost-value.json",'w') as f:
+    outputs:
+      artifacts:
+      - name: cost-value
+        path: /app/cost-value.json
 
   # Run a circuit and return a list of measurements
   #- name: compute-cost-from-grid
