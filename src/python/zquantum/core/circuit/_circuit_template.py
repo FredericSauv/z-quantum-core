@@ -244,14 +244,14 @@ def build_uniform_param_grid(ansatz: dict,
     param_ranges = [(min_value, max_value, step)]*n_params
     return ParameterGrid(param_ranges)
 
-def build_flexible_uniform_param_grid(ansatz: dict, 
+def build_custom_uniform_param_grid(ansatz: dict, 
                             n_layers: int=1, 
                             min_value: List[float]=[0.], 
                             max_value: List[float]=[2*np.pi], 
                             step: List[float]=[np.pi/5],
-                            per_params: bool = True) -> ParameterGrid:
-    """Builds a uniform grid of parameters, where domain (and step) of each 
-    parameters can be specified.
+                            per_parameter: bool = True) -> ParameterGrid:
+    """Builds a uniform grid of parameters, where the domain and step size 
+    for each parameter (or all the parameters in a same layer) can be specified.
 
     Args:
         ansatz (dict): a dict representing a variational circuit template
@@ -268,7 +268,7 @@ def build_flexible_uniform_param_grid(ansatz: dict,
     param_ranges = []
     n_params_cum = 0
     n_params_total = np.sum(ansatz['n_params'])
-    if per_params:
+    if per_parameter:
         for i in range(n_layers):
             n_params_layer = ansatz['n_params'][i % len(ansatz['n_params'])]
             n_params_ref = n_params_cum % n_params_total

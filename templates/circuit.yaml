@@ -128,6 +128,44 @@ spec:
       - name: parameter-grid
         path: /app/parameter_grid.json
 
+  # Build uniform parameter grid with custom min, max, step per parameter (or by layer) 
+  - name: build-custom-uniform-parameter-grid
+    parent: generic-task
+    inputs:
+      parameters:
+      - name: n-layers
+        default: 1
+      - name: list-min-value
+      - name: list-max-value
+      - name: list-step
+      - name: per-parameter
+        default: 'True'
+      - name: command
+        value: python3 main_script.py
+      artifacts:
+      - name: ansatz
+        path: /app/ansatz.json
+      - name: main-script
+        path: /app/main_script.py
+        raw:
+          data: |
+            from zquantum.core.circuit import (save_parameter_grid,
+                                               load_circuit_template,
+                                               build_custom_uniform_param_grid)
+            ansatz = load_circuit_template('ansatz.json')
+            grid = build_custom_uniform_param_grid(ansatz,
+                                                {{inputs.parameters.n-layers}},
+                                                {{inputs.parameters.list-min-value}},
+                                                {{inputs.parameters.list-max-value}},
+                                                {{inputs.parameters.list-step}},
+                                                {{inputs.parameters.per-parameter}})
+            save_parameter_grid(grid, 'parameter_grid.json')
+    outputs:
+      artifacts:
+      - name: parameter-grid
+        path: /app/parameter_grid.json
+
+
   - name: build-circuit-layers-and-connectivity
     parent: generic-task
     inputs:
