@@ -119,11 +119,7 @@ def generate_random_graph_regular(num_nodes: int,
         A networkx.Graph object
     """
     output_graph = nx.random_regular_graph(d = degree, n = num_nodes)
-
-    # iterate through all pairs of nodes
-    if random_weights:
-        weighted_edges = [(e[0], e[1], uniform(0, 1)) for e in output_graph.edges]
-        output_graph.add_weighted_edges_from(weighted_edges)
+    output_graph = weight_graph_edges(output_graph, random_weights)
         
     return output_graph
 
@@ -141,28 +137,44 @@ def generate_complete_graph(num_nodes: int,
         A networkx.Graph object
     """
     output_graph = nx.complete_graph(n = num_nodes)
-
-    # iterate through all pairs of nodes
-    if random_weights:
-        weighted_edges = [(e[0], e[1], uniform(0, 1)) for e in output_graph.edges]
-        output_graph.add_weighted_edges_from(weighted_edges)
+    output_graph = weight_graph_edges(output_graph, random_weights)
         
     return output_graph
 
+def weight_graph_edges(graph: nx.Graph, random_weights: bool = False) -> nx.Graph:
+    """Update the weights of all the edges of a graph. 
+
+    Args:
+        graph: nx.Graph
+            The input graph.
+        random_weights: bool
+            Flag indicating whether the weights should be random or constant (1.).
+    
+    Returns:
+        A networkx.Graph object
+    """
+    assert not(graph.is_multigraph()), "Cannot deal with multigraphs"
+    
+    if random_weights:
+        weighted_edges = [(e[0], e[1], uniform(0, 1)) for e in graph.edges]
+    else:
+        weighted_edges = [(e[0], e[1], 1.0) for e in graph.edges]
+    
+    # If edges already present, it will effectively update them (except for multigraph)
+    graph.add_weighted_edges_from(weighted_edges)
+    return graph
 
 def generate_graph_from_specs(graph_specs):
     """Generate a graph from a specs dictionary
 
     Args:
         graph_specs: dictionnary
-            Specifications of the graph top generate. It should contain at 
+            Specifications of the graph to generate. It should contain at 
             least an entry with key 'type' and one with num_nodes
     
     Returns:
         A networkx.Graph object
     """
-    if type(graph_specs) is str:
-        graph_specs = json.loads(graph_specs)
     type_graph = graph_specs['type']
     num_nodes = graph_specs['num_nodes']
     random_weights = graph_specs.get('random_weights', False)
