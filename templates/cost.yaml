@@ -109,7 +109,7 @@ spec:
             cost_grid = [cost_function.evaluate(parameters) for parameters in grid.params_list]
             
             cost_dict = {}
-            cost_dict["cost"] = cost
+            cost_dict["cost"] = cost_grid
             cost_dict["schema"] = "cost-value"
             cost_dict["parameters"] = [convert_array_to_dict(parameters) for parameters in grid.params_list]
             
