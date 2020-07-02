@@ -114,6 +114,7 @@ spec:
             cost_dict["parameters"] = [convert_array_to_dict(parameters) for parameters in grid.params_list]
             
             with open("cost-value.json",'w') as f:
+                f.write(json.dumps(cost_dict, indent=2))
     outputs:
       artifacts:
       - name: cost-value
